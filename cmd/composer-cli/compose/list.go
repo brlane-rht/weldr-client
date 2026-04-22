@@ -7,13 +7,14 @@ package compose
 import (
 	"fmt"
 	"os"
-	"slices"
 	"sort"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
+	"github.com/osbuild/weldr-client/v2/cloud"
 	"github.com/osbuild/weldr-client/v2/cmd/composer-cli/root"
+	"github.com/osbuild/weldr-client/v2/weldr"
 )
 
 var (
@@ -58,7 +59,29 @@ func list(cmd *cobra.Command, args []string) (rcErr error) {
 	w := tabwriter.NewWriter(os.Stdout, 5, 0, 3, ' ', 0)
 	fmt.Fprintln(w, "ID\tStatus\tBlueprint\tVersion\tType")
 
-	// Check cloudapi for composes first
+	// Get the weldrapi composes first
+	// Response to any errors happens after checking the cloudapi
+	// This is so that any weldrapi composes can be filtered out of the cloudapi
+	// response.
+	weldrComposes, errors, err := root.Client.ListComposes()
+
+	var filter []string
+	for _, arg := range args {
+		switch arg {
+		case "waiting":
+			filter = append(filter, "WAITING")
+		case "running":
+			filter = append(filter, "RUNNING")
+		case "finished":
+			filter = append(filter, "FINISHED")
+		case "failed":
+			filter = append(filter, "FAILED")
+		}
+	}
+	sort.Strings(filter)
+	weldrComposes = weldr.FilterComposes(weldrComposes, filter)
+
+	// Check cloudapi for composes and filter out any weldr api composes
 	if root.Cloud.Exists() {
 		composes, _ := root.Cloud.ListComposes()
 		if len(composes) > 0 {
@@ -77,24 +100,25 @@ func list(cmd *cobra.Command, args []string) (rcErr error) {
 			}
 			sort.Strings(filter)
 
-			for i := range composes {
-				if len(filter) > 0 && !slices.Contains(filter, composes[i].Status) {
-					continue
-				}
+			var weldrUUIDs []string
+			for _, wc := range weldrComposes {
+				weldrUUIDs = append(weldrUUIDs, wc.ID)
+			}
+			composes := cloud.FilterComposes(composes, filter, weldrUUIDs)
 
+			for _, compose := range composes {
 				// Get as much detail as we can about the compose
 				// This depends on the type of build and how it was started so some fields may
 				// be blank.
-				bpName, bpVersion, imageType, _ := composeDetails(composes[i].ID)
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", composes[i].ID,
-					root.Cloud.StatusMap(composes[i].Status),
+				bpName, bpVersion, imageType, _ := composeDetails(compose.ID)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", compose.ID,
+					root.Cloud.StatusMap(compose.Status),
 					bpName, bpVersion, imageType)
 			}
 		}
 	}
 
-	// Check weldrapi for composes
-	composes, errors, err := root.Client.ListComposes()
+	// Handle weldr errors after printing cloudapi composes
 	if err != nil {
 		return root.ExecutionError(cmd, "List Error: %s", err)
 	}
@@ -102,28 +126,9 @@ func list(cmd *cobra.Command, args []string) (rcErr error) {
 		rcErr = root.ExecutionErrors(cmd, errors)
 	}
 
-	var filter []string
-	for _, arg := range args {
-		switch arg {
-		case "waiting":
-			filter = append(filter, "WAITING")
-		case "running":
-			filter = append(filter, "RUNNING")
-		case "finished":
-			filter = append(filter, "FINISHED")
-		case "failed":
-			filter = append(filter, "FAILED")
-		}
-	}
-	sort.Strings(filter)
-
-	for i := range composes {
-		if len(filter) > 0 && !slices.Contains(filter, composes[i].Status) {
-			continue
-		}
-
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", composes[i].ID, composes[i].Status,
-			composes[i].Blueprint, composes[i].Version, composes[i].Type)
+	for _, compose := range weldrComposes {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", compose.ID, compose.Status,
+			compose.Blueprint, compose.Version, compose.Type)
 	}
 
 	w.Flush() //nolint:errcheck
