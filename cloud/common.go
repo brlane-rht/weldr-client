@@ -264,3 +264,21 @@ func (c Client) GetFilePath(route, path string) (string, error) {
 	fileName, err := common.SaveResponseBodyToFile(resp, path)
 	return fileName, err
 }
+
+// FilterComposes returns a filtered list of composes
+// If the status list is non-empty it will only return composes matching the listed states
+// If the uuid list is non-empty it will remove any composes matching one of the listed uuids
+func FilterComposes(composes []ComposeInfoV1, statuses []string, uuids []string) []ComposeInfoV1 {
+	var filtered []ComposeInfoV1
+	for _, compose := range composes {
+		if len(statuses) > 0 && !slices.Contains(statuses, compose.Status) {
+			continue
+		}
+		if len(uuids) > 0 && slices.Contains(uuids, compose.ID) {
+			continue
+		}
+		filtered = append(filtered, compose)
+	}
+
+	return filtered
+}
