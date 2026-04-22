@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
 
 	"github.com/osbuild/weldr-client/v2/internal/common"
@@ -367,4 +368,18 @@ func SortComposeStatusV0(composes []ComposeStatusV0) []ComposeStatusV0 {
 			}
 		})
 	return composes
+}
+
+// FilterComposes returns a filtered list of composes
+// If the status list is non-empty it will only return composes matching the listed states
+func FilterComposes(composes []ComposeStatusV0, statuses []string) []ComposeStatusV0 {
+	var filtered []ComposeStatusV0
+	for _, compose := range composes {
+		if len(statuses) > 0 && !slices.Contains(statuses, compose.Status) {
+			continue
+		}
+		filtered = append(filtered, compose)
+	}
+
+	return filtered
 }
