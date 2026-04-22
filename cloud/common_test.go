@@ -383,3 +383,39 @@ func TestDeleteRawError(t *testing.T) {
 	assert.Equal(t, "DELETE", mc.Req.Method)
 	assert.Equal(t, "/testroute", mc.Req.URL.Path)
 }
+
+func TestFilterComposes(t *testing.T) {
+	testComposes := []ComposeInfoV1{
+		{ID: "ca13a4a7-90ac-4bce-85a1-93cf439fde92", Status: "success"},
+		{ID: "6ff9c4fb-854c-4452-a6c8-8763b6274ddf", Status: "pending"},
+		{ID: "89fe4390-3e6c-4d1d-9ba8-89cb4dbb384d", Status: "success"},
+	}
+
+	testOnlySuccess := []ComposeInfoV1{
+		{ID: "ca13a4a7-90ac-4bce-85a1-93cf439fde92", Status: "success"},
+		{ID: "89fe4390-3e6c-4d1d-9ba8-89cb4dbb384d", Status: "success"},
+	}
+
+	testMinusUUID := []ComposeInfoV1{
+		{ID: "ca13a4a7-90ac-4bce-85a1-93cf439fde92", Status: "success"},
+		{ID: "6ff9c4fb-854c-4452-a6c8-8763b6274ddf", Status: "pending"},
+	}
+
+	var tests = []struct {
+		composes []ComposeInfoV1
+		statuses []string
+		uuids    []string
+		expected []ComposeInfoV1
+	}{
+		{testComposes, nil, nil, testComposes},
+		{testComposes, []string{"success", "pending"}, nil, testComposes},
+		{testComposes, nil, []string{"89fe4390-3e6c-4d1d-9ba8-89cb4dbb384d"}, testMinusUUID},
+		{testComposes, []string{"success"}, nil, testOnlySuccess},
+		{testComposes, []string{"pending", "success"}, []string{"89fe4390-3e6c-4d1d-9ba8-89cb4dbb384d"}, testMinusUUID},
+	}
+
+	for _, test := range tests {
+		results := FilterComposes(test.composes, test.statuses, test.uuids)
+		assert.Equal(t, test.expected, results)
+	}
+}
