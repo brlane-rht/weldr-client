@@ -1034,3 +1034,31 @@ func TestSortComposeStatus(t *testing.T) {
 	}
 	assert.Equal(t, sorted, SortComposeStatusV0(unsorted))
 }
+
+func TestFilterComposes(t *testing.T) {
+	testComposes := []ComposeStatusV0{
+		{ID: "ca13a4a7-90ac-4bce-85a1-93cf439fde92", Status: "FINISHED"},
+		{ID: "6ff9c4fb-854c-4452-a6c8-8763b6274ddf", Status: "RUNNING"},
+		{ID: "89fe4390-3e6c-4d1d-9ba8-89cb4dbb384d", Status: "FINISHED"},
+	}
+
+	testOnlyFinished := []ComposeStatusV0{
+		{ID: "ca13a4a7-90ac-4bce-85a1-93cf439fde92", Status: "FINISHED"},
+		{ID: "89fe4390-3e6c-4d1d-9ba8-89cb4dbb384d", Status: "FINISHED"},
+	}
+
+	var tests = []struct {
+		composes []ComposeStatusV0
+		statuses []string
+		expected []ComposeStatusV0
+	}{
+		{testComposes, nil, testComposes},
+		{testComposes, []string{"FINISHED", "RUNNING"}, testComposes},
+		{testComposes, []string{"FINISHED"}, testOnlyFinished},
+	}
+
+	for _, test := range tests {
+		results := FilterComposes(test.composes, test.statuses)
+		assert.Equal(t, test.expected, results)
+	}
+}
